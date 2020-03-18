@@ -1,1 +1,138 @@
 ﻿
+<div ng-controller="demoCtrl">
+    <div class="row">
+        <button class="btn btn-default" ng-click="addNew()">Add</button>
+        <button class="btn btn-danger" ng-click="removeSelected()">Remove</button>
+    </div>
+
+    <div class="row">
+        CurrentDateTime: {{ currentDateTime | formatDateTimeRu }}
+        <br />
+        TotalUsageTime: {{ totalUsageTime | formatTime }}
+    </div>
+
+    <div class="row">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>VirtualServerId</th>
+                    <th>CreateDateTime</th>
+                    <th>RemoveDateTime</th>
+                    <th>SelectedForRemove</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr ng-repeat="virtualServer in virtualServers">
+                    <td>{{ virtualServer.VirtualServerId }}</td>
+                    <td>{{ virtualServer.CreateDateTime | formatDateTimeRu }}</td>
+                    <td>{{ virtualServer.RemoveDateTime | formatDateTimeRu }}</td>
+                    <td><input type="checkbox" ng-model="virtualServer.SelectedForRemove" /></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section scripts {
+
+<script>
+
+    function getAll(cb) { apiGet("all", cb) };
+    function removeSelected(selected, cb) { apiPost("removeselected", selected, cb) };
+    function addNew(cb) { apiPost("addNew", {}, cb) };
+    function totalUsageTime(cb) { apiGet("totalusagetime", cb) };
+
+    function apiGet(method, callback) {
+        let url = "/api/virtualservers"
+        if (method) url += "/" + method;
+        $.getJSON(url + "?_t=" + new Date().getTime(), callback);
+    }
+
+    function apiPost(method, data, callback) {
+        $.ajax({
+            url: "/api/virtualservers/" + method,
+            type: "POST",
+            dataType: 'json',
+            contentType: "application/json",
+            data: JSON.stringify(data),
+            success: function (res) {
+                callback(res);
+            }
+        });
+    };
+
+    var demoapi = {
+        getAll: getAll,
+        removeSelected: removeSelected,
+        addNew: addNew,
+        totalUsageTime: totalUsageTime
+    };
+
+    var demoApp = angular.module("demoApp", []);
+
+    demoApp.filter("formatDateTimeRu", function() {
+        return function(input) {
+            return input ? moment(input).format("DD.MM.YYYY HH:mm:ss") : '';
+        };
+    });
+
+    demoApp.filter("formatTime", function () {
+        return function (input) {
+            return input ? input.substr(0, 8) : '';
+        };
+    });
+
+    demoApp.controller('demoCtrl', function($scope) {
+        $scope.currentDateTime = new Date();
+        $scope.totalUsageTime = 0;
+        $scope.virtualServers = [];
+
+        $scope.addNew = function() {
+            console.log("addNew");
+            demoapi.addNew(function(createdOne) {
+                $scope.virtualServers.push(createdOne);
+                $scope.$apply();
+            });
+        };
+
+        $scope.removeSelected = function () {
+            let selectedForRemove = $scope.virtualServers.filter(function (vs) { return vs.SelectedForRemove && !vs.RemoveDateTime; }).map(function (vs) { return vs.VirtualServerId; });
+            demoapi.removeSelected(selectedForRemove, function (removeDateTimeIdMap) {
+                for (let virtualServerId in removeDateTimeIdMap) {
+                    let vs = $scope.virtualServers.find(function (vs) { return vs.VirtualServerId == virtualServerId });
+                    vs.RemoveDateTime = removeDateTimeIdMap[virtualServerId];
+                }
+                $scope.$apply();
+            });
+        };
+
+        demoapi.getAll(function (all) {
+            all.forEach(function(each) {
+                $scope.virtualServers.push(each);
+            });
+            $scope.$apply();
+        });
+
+
+
+        setInterval(function () {
+            $scope.currentDateTime = new Date();
+            $scope.$apply();
+        }, 1000);
+
+        demoapi.totalUsageTime(function (totalUsageTime) {
+            $scope.totalUsageTime = totalUsageTime;
+            $scope.$apply();
+        });
+
+        setInterval(function () {
+            demoapi.totalUsageTime(function (totalUsageTime) {
+                $scope.totalUsageTime = totalUsageTime;
+                $scope.$apply();
+            });
+        }, 10000);
+    });
+
+</script>
+}
